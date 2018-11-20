@@ -7,15 +7,15 @@
 #include <ESP8266WiFi.h>
 #include <ESP8266WebServer.h>
 #include <Wire.h>
-int screenWidth = 16;  
-int screenHeight = 2;  
-   
-// Inicializa o display no endereco 0x27
-LiquidCrystal_I2C lcd(0x3F,2,1,0,4,5,6,7,3, POSITIVE);
-char dateBuffer[26];
-const char* ssid="LII";
-const char* password = "wifiLI2Rn";
+int screenWidth = 16;
+int screenHeight = 2;
 
+// Inicializa o display no endereco 0x27
+LiquidCrystal_I2C lcd(0x3F, 2, 1, 0, 4, 5, 6, 7, 3, POSITIVE);
+char dateBuffer[26];
+const char* ssid = "LII";
+const char* password = "wifiLI2Rn";
+String fila[5] = {};
 String form =
   "<p>"
   "<head><title>LCDWifi</title>"
@@ -28,14 +28,14 @@ String form =
 ESP8266WebServer server(80);                             // HTTP server will listen at port 80
 long period;
 int offset = 1, refresh = 0;
-String decodedMsg; 
+String decodedMsg;
 String tape = "Arduino";
 int wait = 250; // In milliseconds
 String clearrr = "                 ";
-int stringStart, stringStop = 0;  
-int scrollCursor = screenWidth;  
-int tamanho =0; 
-String line1 = ""; 
+int stringStart, stringStop = 0;
+int scrollCursor = screenWidth;
+int tamanho = 0;
+String line1 = "";
 
 
 void handle_msg() {
@@ -46,10 +46,11 @@ void handle_msg() {
   String msg = server.arg("msg");
   Serial.println(msg);
   decodedMsg = msg;
-  lcd.setCursor(0,0);
+  lcd.setCursor(0, 0);
   //lcd.print(clearrr);
-  line1 = msg;
-  //lcd.clear();  
+  espaco_fila(msg);
+  // line1 = msg;
+  //lcd.clear();
   //lcd.setCursor(0,0);
   //lcd.print(msg);
   delay(2000);
@@ -76,31 +77,31 @@ void handle_msg() {
   decodedMsg.replace("%3F", "?");
   decodedMsg.replace("%40", "@");
   //Serial.println(decodedMsg);                   // print original string to monitor
- //Serial.println(' ');                          // new line in monitor
+  //Serial.println(' ');                          // new line in monitor
 }
 void setup() {
   // put your setup code here, to run once:
-  lcd.begin (16,2);
+  lcd.begin (16, 2);
   Serial.begin(9600);
   Serial.println();
   Serial.print("Wifi connecting to ");
   Serial.println( ssid );
 
-  WiFi.begin(ssid,password);
+  WiFi.begin(ssid, password);
 
   Serial.println();
   Serial.print("Connecting");
 
-  while( WiFi.status() != WL_CONNECTED ){
-      delay(500);
-      Serial.print(".");        
+  while ( WiFi.status() != WL_CONNECTED ) {
+    delay(500);
+    Serial.print(".");
   }
 
   Serial.println();
   Serial.println("Wifi Connected Success!");
   Serial.print("NodeMCU IP Address : ");
   Serial.println(WiFi.localIP() );
- server.on("/", []() {
+  server.on("/", []() {
     server.send(200, "text/html", form);
   });
   server.on("/msg", handle_msg);                  // And as regular external functions:
@@ -114,38 +115,39 @@ void setup() {
   decodedMsg = result;
   Serial.println("WebServer ready!   ");
 
-  Serial.println(WiFi.localIP()); 
- syncTime(getDateNow());
+  Serial.println(WiFi.localIP());
+  syncTime(getDateNow());
 }
 
 
 void loop() {
   // put your main code here, to run repeatedly:
 
-server.handleClient();  
+  server.handleClient();
 
   lcd.setBacklight(HIGH);
-//lcd.print(getDateNow());
-showTime();
- lcd.setCursor(scrollCursor, 0);  
-  lcd.print(line1.substring(stringStart,stringStop));  
-   
-
-  //Quanto menor o valor do delay, mais rapido o scroll  
-  delay(250);  
-  scroll_sup(); //Chama a rotina que executa o scroll  
-
-  //Verifica o tamanho da string  
-  tamanho = line1.length();  
-  if (stringStart == tamanho)  
-  {  
-    stringStart = 0;  
-    stringStop = 0;  
-  } 
+  //lcd.print(getDateNow());
+  showTime();
   
+    lcd.setCursor(scrollCursor, 0);
+  lcd.print(line1.substring(stringStart, stringStop));
+
+
+  //Quanto menor o valor do delay, mais rapido o scroll
+  delay(250);
+  scroll_sup(); //Chama a rotina que executa o scroll
+
+  //Verifica o tamanho da string
+  tamanho = line1.length();
+  if (stringStart == tamanho)
+  {
+    stringStart = 0;
+    stringStop = 0;
+  }
+
 }
 
-String getDateNow(){
+String getDateNow() {
   HTTPClient http;
   http.begin(rotaDateTime);
   int httpCode = http.GET(); //Retorna o código http, caso não conecte irá retornar -1
@@ -176,27 +178,48 @@ bool syncTime(String dateTime)
   return 1;
 };
 
-void showTime(){
+void showTime() {
   sprintf(dateBuffer, "%04u-%02u-%02u %02u:%02u:%02u", year(), month(), day(), hour(), minute(), second());
-   lcd.setCursor(0,1);
+  lcd.setCursor(0, 1);
   lcd.print(dateBuffer);
-  
+
 };
 
-void scroll_sup()  
-{  
-  lcd.clear();  
-  if(stringStart == 0 && scrollCursor > 0)
-  {  
-    scrollCursor--;  
-    stringStop++;  
-  } else if (stringStart == stringStop){  
-    stringStart = stringStop = 0;  
-    scrollCursor = screenWidth;  
-  } else if (stringStop == line1.length() && scrollCursor == 0) {  
-    stringStart++;  
-  } else {  
-    stringStart++;  
-    stringStop++;  
-  }  
-}  
+void scroll_sup()
+{
+  lcd.clear();
+  if (stringStart == 0 && scrollCursor > 0)
+  {
+    scrollCursor--;
+    stringStop++;
+  } else if (stringStart == stringStop) {
+    stringStart = stringStop = 0;
+    scrollCursor = screenWidth;
+  } else if (stringStop == line1.length() && scrollCursor == 0) {
+    stringStart++;
+  } else {
+    stringStart++;
+    stringStop++;
+  }
+}
+
+void espaco_fila(String msg) {
+  for (int i = 0; i < 5; i++) {
+    if (fila[i] == "") {
+      fila[i] = msg;
+      break;
+    }
+  }
+}
+
+void exclui_msg() {
+  for (int i = 1; i < 5; i++) {
+    if (fila[i] == "") {
+      fila[i - 1] == "";
+      break;
+    }
+    else {
+      fila[i-1] = fila[i];
+    }
+  }
+}
