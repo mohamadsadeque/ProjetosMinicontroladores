@@ -1,14 +1,21 @@
+
+#include <LiquidCrystal_I2C.h>
+#include <Time.h>
+#include <TimeLib.h>
+#define rotaDateTime "http://api.saiot.ect.ufrn.br/v1/device/history/datetime"
+#include <ESP8266HTTPClient.h>
 #include <ESP8266WiFi.h>
 #include <ESP8266WebServer.h>
-#include <SPI.h>
-#include <Adafruit_GFX.h>
-#include <Max72xxPanel.h>
-#include <LiquidCrystal_I2C.h>
-#define SSID "LII"                      // insert your SSID
-#define PASS "wifiLI2Rn"                    // insert your password
 #include <Wire.h>
+int screenWidth = 16;  
+int screenHeight = 2;  
+   
+// Inicializa o display no endereco 0x27
 LiquidCrystal_I2C lcd(0x3F,2,1,0,4,5,6,7,3, POSITIVE);
-// ******************* String form to sent to the client-browser ************************************
+char dateBuffer[26];
+const char* ssid="LII";
+const char* password = "wifiLI2Rn";
+
 String form =
   "<p>"
   "<head><title>LCDWifi</title>"
@@ -21,25 +28,18 @@ String form =
 ESP8266WebServer server(80);                             // HTTP server will listen at port 80
 long period;
 int offset = 1, refresh = 0;
-int pinCS = 0; // Attach CS to this pin, DIN to MOSI and CLK to SCK (cf http://arduino.cc/en/Reference/SPI )
-int numberOfHorizontalDisplays = 8;
-int numberOfVerticalDisplays = 1;
-String decodedMsg;
-Max72xxPanel matrix = Max72xxPanel(pinCS, numberOfHorizontalDisplays, numberOfVerticalDisplays);
-
+String decodedMsg; 
 String tape = "Arduino";
 int wait = 250; // In milliseconds
 String clearrr = "                 ";
-int spacer = 2;
-int width = 5 + spacer; // The font width is 5 pixels
+int stringStart, stringStop = 0;  
+int scrollCursor = screenWidth;  
+int tamanho =0; 
+String line1 = ""; 
 
-/*
-  handles the messages coming from the webbrowser, restores a few special characters and
-  constructs the strings that can be sent to the oled display
-*/
+
 void handle_msg() {
 
-  matrix.fillScreen(LOW);
   server.send(200, "text/html", form);    // Send same page so they can send another msg
   refresh = 1;
   // Display msg on Oled
@@ -47,9 +47,11 @@ void handle_msg() {
   Serial.println(msg);
   decodedMsg = msg;
   lcd.setCursor(0,0);
-  lcd.print(clearrr);
-  lcd.setCursor(0,0);
-  lcd.print(msg);
+  //lcd.print(clearrr);
+  line1 = msg;
+  //lcd.clear();  
+  //lcd.setCursor(0,0);
+  //lcd.print(msg);
   delay(2000);
   // Restore special characters that are misformed to %char by the client browser
   decodedMsg.replace("+", " ");
@@ -76,29 +78,35 @@ void handle_msg() {
   //Serial.println(decodedMsg);                   // print original string to monitor
  //Serial.println(' ');                          // new line in monitor
 }
-
-void setup(void) {
- lcd.begin (16,2);
+void setup() {
+  // put your setup code here, to run once:
+  lcd.begin (16,2);
   Serial.begin(9600);
-  //ESP.wdtDisable();                               // used to debug, disable wachdog timer,
-  Serial.begin(9600);                           // full speed to monitor
-  Serial.println("Estou vivo");
-  WiFi.begin(SSID, PASS);                         // Connect to WiFi network
-  while (WiFi.status() != WL_CONNECTED) {         // Wait for connection
-    delay(500);
-    Serial.print(".");
+  Serial.println();
+  Serial.print("Wifi connecting to ");
+  Serial.println( ssid );
+
+  WiFi.begin(ssid,password);
+
+  Serial.println();
+  Serial.print("Connecting");
+
+  while( WiFi.status() != WL_CONNECTED ){
+      delay(500);
+      Serial.print(".");        
   }
- 
-  // Set up the endpoints for HTTP server,  Endpoints can be written as inline functions:
-  server.on("/", []() {
+
+  Serial.println();
+  Serial.println("Wifi Connected Success!");
+  Serial.print("NodeMCU IP Address : ");
+  Serial.println(WiFi.localIP() );
+ server.on("/", []() {
     server.send(200, "text/html", form);
   });
   server.on("/msg", handle_msg);                  // And as regular external functions:
   server.begin();                                 // Start the server
-
   Serial.print("SSID : ");                        // prints SSID in monitor
-  Serial.println(SSID);                           // to monitor
-
+  Serial.println(ssid);                           // to monitor
   char result[16];
   sprintf(result, "%3d.%3d.%1d.%3d", WiFi.localIP()[0], WiFi.localIP()[1], WiFi.localIP()[2], WiFi.localIP()[3]);
   Serial.println();
@@ -106,13 +114,89 @@ void setup(void) {
   decodedMsg = result;
   Serial.println("WebServer ready!   ");
 
-  Serial.println(WiFi.localIP());                 // Serial monitor prints localIP
-  Serial.print(analogRead(A0));
-
+  Serial.println(WiFi.localIP()); 
+ syncTime(getDateNow());
 }
 
 
-void loop(void) {
+void loop() {
+  // put your main code here, to run repeatedly:
+
 server.handleClient();  
- delay(wait);
+
+  lcd.setBacklight(HIGH);
+//lcd.print(getDateNow());
+showTime();
+ lcd.setCursor(scrollCursor, 0);  
+  lcd.print(line1.substring(stringStart,stringStop));  
+   
+
+  //Quanto menor o valor do delay, mais rapido o scroll  
+  delay(250);  
+  scroll_sup(); //Chama a rotina que executa o scroll  
+
+  //Verifica o tamanho da string  
+  tamanho = line1.length();  
+  if (stringStart == tamanho)  
+  {  
+    stringStart = 0;  
+    stringStop = 0;  
+  } 
+  
 }
+
+String getDateNow(){
+  HTTPClient http;
+  http.begin(rotaDateTime);
+  int httpCode = http.GET(); //Retorna o código http, caso não conecte irá retornar -1
+  String payload = http.getString();
+  http.end();
+  if (httpCode != 200) {
+    return "0";
+  }
+  return payload;
+};
+
+bool syncTime(String dateTime)
+{
+  int ano, mes, dia, h, m, s;
+  if (dateTime == "0")
+  {
+    Serial.println("Error data");
+    return 0;
+  }
+  ano = dateTime.substring(1, 5).toInt();
+  mes = dateTime.substring(6, 8).toInt();
+  Serial.println(mes);
+  dia = dateTime.substring(8, 11).toInt();
+  h = dateTime.substring(11, 14).toInt();
+  m = dateTime.substring(14, 17).toInt();
+  s = dateTime.substring(17, 20).toInt();
+  setTime(h, m, s, dia, mes, ano);
+  return 1;
+};
+
+void showTime(){
+  sprintf(dateBuffer, "%04u-%02u-%02u %02u:%02u:%02u", year(), month(), day(), hour(), minute(), second());
+   lcd.setCursor(0,1);
+  lcd.print(dateBuffer);
+  
+};
+
+void scroll_sup()  
+{  
+  lcd.clear();  
+  if(stringStart == 0 && scrollCursor > 0)
+  {  
+    scrollCursor--;  
+    stringStop++;  
+  } else if (stringStart == stringStop){  
+    stringStart = stringStop = 0;  
+    scrollCursor = screenWidth;  
+  } else if (stringStop == line1.length() && scrollCursor == 0) {  
+    stringStart++;  
+  } else {  
+    stringStart++;  
+    stringStop++;  
+  }  
+}  
