@@ -7,15 +7,19 @@
 #include <ESP8266WiFi.h>
 #include <ESP8266WebServer.h>
 #include <Wire.h>
+#define n_msg_max 5 // numero de mensagens maxima
 int screenWidth = 16;
 int screenHeight = 2;
+int n_msg = 0; // numero de mensagens
+volatile int pos = 0; // posição exibida
+int n_msg_exibidas = 0;
 
-// Inicializa o display no endereco 0x27
+// Inicializa o display no endereco 0x3F
 LiquidCrystal_I2C lcd(0x3F, 2, 1, 0, 4, 5, 6, 7, 3, POSITIVE);
 char dateBuffer[26];
 const char* ssid = "LII";
 const char* password = "wifiLI2Rn";
-String fila[5] = {};
+String fila[n_msg_max];
 String form =
   "<p>"
   "<head><title>LCDWifi</title>"
@@ -24,6 +28,7 @@ String form =
   "</center>"
   "<form action='msg'><p>Escreva o aviso <input type='text' name='msg' size=100 autofocus> <input type='submit' value='Submit'></form>"
   "</center>";
+
 
 ESP8266WebServer server(80);                             // HTTP server will listen at port 80
 long period;
@@ -36,8 +41,9 @@ int stringStart, stringStop = 0;
 int scrollCursor = screenWidth;
 int tamanho = 0;
 String line1 = "";
-
-
+unsigned long int UltimaVez1 = 0;
+unsigned long int UltimaVez2 = 0;
+unsigned long int UltimaVez3 = 0;
 void handle_msg() {
 
   server.send(200, "text/html", form);    // Send same page so they can send another msg
@@ -47,40 +53,27 @@ void handle_msg() {
   Serial.println(msg);
   decodedMsg = msg;
   lcd.setCursor(0, 0);
-  //lcd.print(clearrr);
-  espaco_fila(msg);
-  // line1 = msg;
-  //lcd.clear();
-  //lcd.setCursor(0,0);
-  //lcd.print(msg);
-  delay(2000);
-  // Restore special characters that are misformed to %char by the client browser
-  decodedMsg.replace("+", " ");
-  decodedMsg.replace("%21", "!");
-  decodedMsg.replace("%22", "");
-  decodedMsg.replace("%23", "#");
-  decodedMsg.replace("%24", "$");
-  decodedMsg.replace("%25", "%");
-  decodedMsg.replace("%26", "&");
-  decodedMsg.replace("%27", "'");
-  decodedMsg.replace("%28", "(");
-  decodedMsg.replace("%29", ")");
-  decodedMsg.replace("%2A", "*");
-  decodedMsg.replace("%2B", "+");
-  decodedMsg.replace("%2C", ",");
-  decodedMsg.replace("%2F", "/");
-  decodedMsg.replace("%3A", ":");
-  decodedMsg.replace("%3B", ";");
-  decodedMsg.replace("%3C", "<");
-  decodedMsg.replace("%3D", "=");
-  decodedMsg.replace("%3E", ">");
-  decodedMsg.replace("%3F", "?");
-  decodedMsg.replace("%40", "@");
-  //Serial.println(decodedMsg);                   // print original string to monitor
-  //Serial.println(' ');                          // new line in monitor
+  fila[n_msg] = msg;
+  n_msg++;
+  if (n_msg >= n_msg_max) {
+    n_msg = 0;
+  }
+  if (n_msg_exibidas < n_msg_max)
+      n_msg_exibidas++;
+
+  delay(200);
+  
 }
+
 void setup() {
   // put your setup code here, to run once:
+
+  pinMode(D5,INPUT_PULLUP);
+  pinMode(D6,INPUT_PULLUP);
+  pinMode(D7,INPUT_PULLUP);
+ attachInterrupt(digitalPinToInterrupt(D7), exclui_msg, FALLING);
+ attachInterrupt(digitalPinToInterrupt(D5), incrementopos, FALLING);
+  attachInterrupt(digitalPinToInterrupt(D6), decrementopos, FALLING);
   lcd.begin (16, 2);
   Serial.begin(9600);
   Serial.println();
@@ -104,7 +97,7 @@ void setup() {
   server.on("/", []() {
     server.send(200, "text/html", form);
   });
-  server.on("/msg", handle_msg);                  // And as regular external functions:
+  server.on("/msg", handle_msg);
   server.begin();                                 // Start the server
   Serial.print("SSID : ");                        // prints SSID in monitor
   Serial.println(ssid);                           // to monitor
@@ -114,38 +107,30 @@ void setup() {
   Serial.println(result);
   decodedMsg = result;
   Serial.println("WebServer ready!   ");
-
   Serial.println(WiFi.localIP());
   syncTime(getDateNow());
 }
 
 
 void loop() {
-  // put your main code here, to run repeatedly:
+
 
   server.handleClient();
-
   lcd.setBacklight(HIGH);
-  //lcd.print(getDateNow());
   showTime();
-  
-    lcd.setCursor(scrollCursor, 0);
-  lcd.print(line1.substring(stringStart, stringStop));
-
-
-  //Quanto menor o valor do delay, mais rapido o scroll
+  lcd.setCursor(scrollCursor, 0);
+  lcd.print(fila[pos].substring(stringStart, stringStop));
   delay(250);
-  scroll_sup(); //Chama a rotina que executa o scroll
-
+  scroll_sup(pos); //Chama a rotina que executa o scroll
   //Verifica o tamanho da string
-  tamanho = line1.length();
+  tamanho = fila[pos].length();
   if (stringStart == tamanho)
   {
-    stringStart = 0;
-    stringStop = 0;
+   incrementopos();
   }
 
 }
+
 
 String getDateNow() {
   HTTPClient http;
@@ -185,7 +170,7 @@ void showTime() {
 
 };
 
-void scroll_sup()
+void scroll_sup(int n)
 {
   lcd.clear();
   if (stringStart == 0 && scrollCursor > 0)
@@ -195,7 +180,7 @@ void scroll_sup()
   } else if (stringStart == stringStop) {
     stringStart = stringStop = 0;
     scrollCursor = screenWidth;
-  } else if (stringStop == line1.length() && scrollCursor == 0) {
+  } else if (stringStop == fila[n].length() && scrollCursor == 0) {
     stringStart++;
   } else {
     stringStart++;
@@ -213,13 +198,38 @@ void espaco_fila(String msg) {
 }
 
 void exclui_msg() {
-  for (int i = 1; i < 5; i++) {
-    if (fila[i] == "") {
-      fila[i - 1] == "";
-      break;
-    }
-    else {
-      fila[i-1] = fila[i];
-    }
+  if(millis() - UltimaVez3 > 250){
+  fila[pos] = "";
+  UltimaVez3 = millis();
   }
 }
+
+void incrementopos(){
+  if(millis() - UltimaVez1 > 250){
+  scrollCursor = 16;
+  stringStart = 0;
+    stringStop = 0;
+    if (pos < n_msg_exibidas-1) {
+      pos++;
+    }
+    else {
+      pos = 0;
+    }
+  }
+ UltimaVez1 = millis();
+}
+
+ void decrementopos(){
+  if(millis() - UltimaVez2 > 250){
+  scrollCursor = 16;
+  stringStart = 0;
+    stringStop = 0;
+    if (pos > 0) {
+      pos--;
+    }
+    else {
+      pos = (n_msg_exibidas)-1;
+    }
+    UltimaVez2 = millis();
+  }
+  }
