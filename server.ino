@@ -17,8 +17,8 @@ int n_msg_exibidas = 0;
 // Inicializa o display no endereco 0x3F
 LiquidCrystal_I2C lcd(0x3F, 2, 1, 0, 4, 5, 6, 7, 3, POSITIVE);
 char dateBuffer[26];
-const char* ssid = "LII";
-const char* password = "wifiLI2Rn";
+const char* ssid = "saiot";
+const char* password = "u2345678";
 String fila[n_msg_max];
 String form =
   "<p>"
@@ -44,8 +44,10 @@ String line1 = "";
 unsigned long int UltimaVez1 = 0;
 unsigned long int UltimaVez2 = 0;
 unsigned long int UltimaVez3 = 0;
-void handle_msg() {
 
+
+void handle_msg() {
+  digitalWrite(D8, HIGH);
   server.send(200, "text/html", form);    // Send same page so they can send another msg
   refresh = 1;
   // Display msg on Oled
@@ -62,12 +64,12 @@ void handle_msg() {
       n_msg_exibidas++;
 
   delay(200);
-  
+ // digitalWrite(D8,LOW);
 }
 
 void setup() {
   // put your setup code here, to run once:
-
+ pinMode(D8,OUTPUT);
   pinMode(D5,INPUT_PULLUP);
   pinMode(D6,INPUT_PULLUP);
   pinMode(D7,INPUT_PULLUP);
