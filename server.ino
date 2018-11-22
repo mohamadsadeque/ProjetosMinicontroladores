@@ -47,7 +47,7 @@ unsigned long int UltimaVez3 = 0;
 
 
 void handle_msg() {
-  digitalWrite(D8, HIGH);
+  digitalWrite(15, HIGH);
   server.send(200, "text/html", form);    // Send same page so they can send another msg
   refresh = 1;
   // Display msg on Oled
@@ -64,12 +64,12 @@ void handle_msg() {
       n_msg_exibidas++;
 
   delay(200);
- // digitalWrite(D8,LOW);
+  digitalWrite(15,LOW);
 }
 
 void setup() {
   // put your setup code here, to run once:
- pinMode(D8,OUTPUT);
+ pinMode(15,OUTPUT);
   pinMode(D5,INPUT_PULLUP);
   pinMode(D6,INPUT_PULLUP);
   pinMode(D7,INPUT_PULLUP);
