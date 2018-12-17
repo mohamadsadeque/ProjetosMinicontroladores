@@ -1,3 +1,5 @@
+ #include <WiFiManager.h>
+
 
 #include <LiquidCrystal_I2C.h>
 #include <Time.h>
@@ -17,8 +19,8 @@ int n_msg_exibidas = 0;
 // Inicializa o display no endereco 0x3F
 LiquidCrystal_I2C lcd(0x3F, 2, 1, 0, 4, 5, 6, 7, 3, POSITIVE);
 char dateBuffer[26];
-const char* ssid = "saiot";
-const char* password = "u2345678";
+const char* ssid = "SAWIF";
+const char* password = "12345678";
 String fila[n_msg_max];
 String form =
   "<p>"
@@ -44,6 +46,7 @@ String line1 = "";
 unsigned long int UltimaVez1 = 0;
 unsigned long int UltimaVez2 = 0;
 unsigned long int UltimaVez3 = 0;
+String IP;
 
 
 void handle_msg() {
@@ -96,6 +99,8 @@ void setup() {
   Serial.println("Wifi Connected Success!");
   Serial.print("NodeMCU IP Address : ");
   Serial.println(WiFi.localIP() );
+  delay(15);
+  syncTime(getDateNow());
   server.on("/", []() {
     server.send(200, "text/html", form);
   });
@@ -110,7 +115,8 @@ void setup() {
   decodedMsg = result;
   Serial.println("WebServer ready!   ");
   Serial.println(WiFi.localIP());
-  syncTime(getDateNow());
+   fila[0] = String("192.168.43.72");
+  
 }
 
 
@@ -140,6 +146,9 @@ String getDateNow() {
   int httpCode = http.GET(); //Retorna o código http, caso não conecte irá retornar -1
   String payload = http.getString();
   http.end();
+  Serial.println(httpCode);
+    Serial.println(payload);
+
   if (httpCode != 200) {
     return "0";
   }
@@ -208,6 +217,7 @@ void exclui_msg() {
 
 void incrementopos(){
   if(millis() - UltimaVez1 > 250){
+   Serial.println("deslg");
   scrollCursor = 16;
   stringStart = 0;
     stringStop = 0;
@@ -223,6 +233,7 @@ void incrementopos(){
 
  void decrementopos(){
   if(millis() - UltimaVez2 > 250){
+    Serial.println("lgia");
   scrollCursor = 16;
   stringStart = 0;
     stringStop = 0;
